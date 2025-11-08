@@ -1,9 +1,9 @@
+// UPDATED script.js — পেস্ট করে পুরাতনটির জায়গায় রাখুন
+
 document.addEventListener('DOMContentLoaded', function () {
   // তারিখ ফিল্ডে আজকের তারিখ সেট করুন
   const dateInput = document.getElementById('date');
-if (dateInput) {
-  dateInput.value = new Date().toISOString().split('T')[0];
-}
+  if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
 
   loadJS();            // jsPDF লাইব্রেরি লোড
   fetchTotalDue();     // মোট বকেয়া লোড
@@ -11,37 +11,55 @@ if (dateInput) {
   setupEventListeners(); // ইভেন্ট লিসেনার সেটআপ
 });
 
+// ========================
+// CONFIG: এখানে আপনার API URL দিন (যদি আলাদা হোস্টে থাকে)
+const endpoint = '/api'; // <-- যদি API অন্য জায়গায় থাকে: 'https://your-api.example.com/api'
+// ========================
+
 // গ্লোবাল ভেরিয়েবল
 let currentPage = 1;
 const rowsPerPage = 12;
 let allData = [];
-const endpoint = 'https://script.google.com/macros/s/AKfycbxWlGYvy9AfQnsE6b0Zr4PD5JaYLCvR15p5qGPPsEjxQZhUlmPGslcKZ9kJeMRR_IPoFA/exec';
 
 // ইভেন্ট লিসেনার সেটআপ
 function setupEventListeners() {
-  document.getElementById('amountPayable').addEventListener('input', calculateDue);
-  document.getElementById('salaryForm').addEventListener('submit', submitSalaryData);
-  document.getElementById('prevPage').addEventListener('click', prevPage);
-  document.getElementById('nextPage').addEventListener('click', nextPage);
-  document.querySelector('.filter-btn').addEventListener('click', applyFilters);
-  document.querySelector('.cancel-btn').addEventListener('click', resetFilters);
-  
+  document.getElementById('amountPayable')?.addEventListener('input', calculateDue);
+  document.getElementById('salaryForm')?.addEventListener('submit', submitSalaryData);
+  document.getElementById('prevPage')?.addEventListener('click', prevPage);
+  document.getElementById('nextPage')?.addEventListener('click', nextPage);
+  document.querySelector('.filter-btn')?.addEventListener('click', applyFilters);
+  document.querySelector('.cancel-btn')?.addEventListener('click', resetFilters);
 }
-// বেতন ও প্রদেয় অর্থ থেকে বকেয়া হিসাব
+
+// ছোট ব্যবহারিক helper — বিভিন্ন key নাম support করে
+function getField(obj, ...keys) {
+  for (const k of keys) {
+    if (obj == null) continue;
+    if (obj[k] !== undefined && obj[k] !== null) return obj[k];
+  }
+  return '';
+}
+
+// বেতন ও প্রদেয় অর্থ থেকে বকেয়া হিসাব (লোকাল ক্যালকুলেশন)
 function calculateDue() {
-  const salary = parseFloat(document.getElementById('salaryAmount').value) || 0;
-  const payable = parseFloat(document.getElementById('amountPayable').value) || 0;
+  const salary = parseFloat(document.getElementById('salaryAmount')?.value || 0) || 0;
+  const payable = parseFloat(document.getElementById('amountPayable')?.value || 0) || 0;
   const due = salary - payable;
-  document.getElementById('monthlyDue').value = due >= 0 ? due.toFixed(2) : 0;
+  const el = document.getElementById('monthlyDue');
+  if (el) el.value = (due >= 0 ? due.toFixed(2) : '0.00');
 }
-// মোট বকেয়া ফেচ
+
+// মোট বকেয়া ফেচ (API থেকে)
 async function fetchTotalDue() {
   try {
     const response = await fetch(endpoint);
     if (!response.ok) throw new Error('Network error');
     const data = await response.json();
-    document.getElementById('totalDue').value = data.totalDue.toFixed(2);
-    document.getElementById('displayTotalDue').textContent = data.totalDue.toFixed(2);
+    const total = Number(data.totalDue || 0);
+    const totalInput = document.getElementById('totalDue');
+    const totalDisplay = document.getElementById('displayTotalDue');
+    if (totalInput) totalInput.value = total.toFixed(2);
+    if (totalDisplay) totalDisplay.textContent = total.toFixed(2);
   } catch (error) {
     console.error('Total due fetch error:', error);
   }
@@ -49,8 +67,8 @@ async function fetchTotalDue() {
 
 // ডেটা লোড ও টেবিল আপডেট
 async function loadTableData() {
-  const month = document.getElementById('filterMonth').value;
-  const year = document.getElementById('filterYear').value;
+  const month = document.getElementById('filterMonth')?.value || '';
+  const year = document.getElementById('filterYear')?.value || '';
   let url = `${endpoint}?action=read`;
   if (month) url += `&month=${encodeURIComponent(month)}`;
   if (year) url += `&year=${encodeURIComponent(year)}`;
@@ -71,9 +89,10 @@ async function loadTableData() {
 // টেবিল আপডেট (পেজ অনুযায়ী)
 function updateTable() {
   const tbody = document.querySelector('#salaryTable tbody');
+  if (!tbody) return;
   tbody.innerHTML = '';
 
-const startIdx = (currentPage - 1) * rowsPerPage;
+  const startIdx = (currentPage - 1) * rowsPerPage;
   const reversedData = [...allData].reverse(); // Latest entries first
   const paginatedData = reversedData.slice(startIdx, startIdx + rowsPerPage);
   let totalDue = 0;
@@ -81,24 +100,32 @@ const startIdx = (currentPage - 1) * rowsPerPage;
   if (paginatedData.length > 0) {
     paginatedData.forEach(row => {
       const tr = document.createElement('tr');
-      const due = parseFloat(row.monthlyDue) || 0;
 
-      // ✅ শর্ত অনুযায়ী রঙ সেট করা
-      if (due === 0) {
-        tr.style.backgroundColor = '#d4edda'; // Light green for no due
-        tr.style.color = '#155724'; // Dark green text
+      // read fields supporting multiple naming conventions
+      const dateVal = getField(row, 'Date', 'date');
+      const monthVal = getField(row, 'Month', 'month');
+      const yearVal = getField(row, 'Year', 'year');
+      const amountPayable = parseFloat(getField(row, 'amountPayable', 'Amount payable', 'amount_payable')) || 0;
+      const monthlyDue = parseFloat(getField(row, 'monthlyDue', 'Monthly due', 'monthly_due')) || 0;
+
+      // styling based on due
+      if (monthlyDue === 0) {
+        tr.style.backgroundColor = '#d4edda'; // light green
+        tr.style.color = '#155724';
       } else {
-        tr.style.backgroundColor = '#f8d7da'; // Light red for due
-        tr.style.color = '#721c24'; // Dark red text
+        tr.style.backgroundColor = '#f8d7da'; // light red
+        tr.style.color = '#721c24';
       }
+
       tr.innerHTML = `
-        <td>${formatDate(row.date)}</td>
-        <td>${row.month || ''}</td>
-        <td>${row.year || ''}</td>
-        <td>${row.amountPayable || '0'}</td>
-        <td>${row.monthlyDue || '0'}</td>`;
+        <td>${formatDate(dateVal)}</td>
+        <td>${monthVal || ''}</td>
+        <td>${yearVal || ''}</td>
+        <td>${amountPayable || '0'}</td>
+        <td>${monthlyDue || '0'}</td>
+      `;
       tbody.appendChild(tr);
-      totalDue += parseFloat(row.monthlyDue) || 0;
+      totalDue += monthlyDue;
     });
   } else {
     tbody.innerHTML = '<tr><td colspan="6">কোনো ডাটা পাওয়া যায়নি</td></tr>';
@@ -110,15 +137,17 @@ const startIdx = (currentPage - 1) * rowsPerPage;
 
 // Pagination & Total
 function updatePaginationControls() {
-  const totalPages = Math.ceil(allData.length / rowsPerPage);
+  const totalPages = Math.max(1, Math.ceil(allData.length / rowsPerPage));
   document.getElementById('pageInfo').textContent = `page ${currentPage} / ${totalPages}`;
   document.getElementById('prevPage').disabled = currentPage === 1;
   document.getElementById('nextPage').disabled = currentPage >= totalPages;
 }
 
 function updateTotalDueDisplay(totalDue) {
-  document.getElementById('totalDue').value = totalDue.toFixed(2);
-  document.getElementById('displayTotalDue').textContent = totalDue.toFixed(2);
+  const totalInput = document.getElementById('totalDue');
+  const totalDisplay = document.getElementById('displayTotalDue');
+  if (totalInput) totalInput.value = totalDue.toFixed(2);
+  if (totalDisplay) totalDisplay.textContent = totalDue.toFixed(2);
 }
 
 // Pagination actions
@@ -143,51 +172,67 @@ function applyFilters() {
 }
 
 function resetFilters() {
-  document.getElementById('filterMonth').value = '';
-  document.getElementById('filterYear').value = '';
+  const fm = document.getElementById('filterMonth'); if (fm) fm.value = '';
+  const fy = document.getElementById('filterYear'); if (fy) fy.value = '';
   loadTableData();
   showMessage('ফিল্টার ক্যান্সেল করা হয়েছে', 'success');
 }
 
-// Form submit
+// Form submit (POST to /api)
 async function submitSalaryData(event) {
   event.preventDefault();
   const form = document.getElementById("salaryForm");
+  if (!form) return;
   const formData = new FormData(form);
 
-  const date = formData.get("date");
-  const year = formData.get("year");
-  const month = formData.get("month");
-  const amountPayable = parseFloat(formData.get("amountPayable")) || 0;
-  const fixedSalary = parseFloat(formData.get("salaryAmount")) || 0;
+  // read basic values
+  const date = formData.get("date") || formData.get("Date") || '';
+  const year = formData.get("year") || formData.get("Year") || '';
+  const month = formData.get("month") || formData.get("Month") || '';
+  const amountPayable = parseFloat(formData.get("amountPayable") || formData.get("Amount payable") || 0) || 0;
+  const fixedSalary = parseFloat(formData.get("salaryAmount") || formData.get("Salary Amount") || 0) || 0;
 
   try {
-    const response = await fetch(`${endpoint}?action=read&month=${month}&year=${year}`);
-    const data = await response.json();
-    const entries = data.entries || [];
-    const paidSoFar = entries.reduce((sum, e) => sum + (parseFloat(e.amountPayable) || 0), 0);
+    // fetch existing month entries to compute cumulative paid
+    const resp = await fetch(`${endpoint}?action=read&month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`);
+    const existing = await resp.json();
+    const entries = existing.entries || [];
+
+    const paidSoFar = entries.reduce((sum, e) => {
+      return sum + (parseFloat(getField(e, 'amountPayable', 'Amount payable', 'amount_payable')) || 0);
+    }, 0);
 
     const totalPaid = paidSoFar + amountPayable;
     const monthlyDue = Math.max(fixedSalary - totalPaid, 0);
+
+    // calculate totalDue across months (re-using calculateTotalDue logic)
     const totalDue = await calculateTotalDue(month, year, amountPayable, fixedSalary);
 
-    formData.set("monthlyDue", monthlyDue.toFixed(2));
-    formData.set("salaryAmount", fixedSalary);
-    formData.set("totalDue", totalDue.toFixed(2));
+    // set fields expected by API (use names matching API)
+    formData.set('Date', date);
+    formData.set('Year', year);
+    formData.set('Month', month);
+    formData.set('Payment type', formData.get('paymentType') || formData.get('Payment type') || '');
+    formData.set('Salary Amount', fixedSalary.toFixed(2));
+    formData.set('Amount payable', amountPayable.toFixed(2));
+    formData.set('Monthly due', monthlyDue.toFixed(2));
+    formData.set('Total due', totalDue.toFixed(2));
+    formData.set('Comment', formData.get('comment') || formData.get('Comment') || '');
 
+    // submit to API
     const submitResponse = await fetch(endpoint, {
       method: "POST",
       body: formData,
     });
 
     const result = await submitResponse.text();
-    if (result === "Success") {
+    if (result && result.includes('Success')) {
       showMessage("সফলভাবে সাবমিট হয়েছে", "success");
       form.reset();
       fetchTotalDue();
       loadTableData();
     } else {
-      throw new Error(result);
+      throw new Error(result || 'Server error');
     }
   } catch (error) {
     console.error("Submission Error:", error);
@@ -197,39 +242,48 @@ async function submitSalaryData(event) {
 
 // মাসভিত্তিক ও মোট বকেয়া হিসাব
 async function calculateTotalDue(currentMonth, currentYear, currentPayable, currentSalary) {
-  const response = await fetch(`${endpoint}?action=read`);
-  const data = await response.json();
-  const allEntries = data.entries || [];
+  try {
+    const response = await fetch(`${endpoint}?action=read`);
+    const data = await response.json();
+    const allEntries = data.entries || [];
 
-  // নতুন এন্ট্রি অন্তর্ভুক্ত
-  const extendedEntries = [...allEntries, {
-    month: currentMonth,
-    year: currentYear,
-    amountPayable: currentPayable,
-    salaryAmount: currentSalary
-  }];
+    // add the new pending entry
+    const extendedEntries = [...allEntries, {
+      month: currentMonth,
+      year: currentYear,
+      amountPayable: currentPayable,
+      salaryAmount: currentSalary
+    }];
 
-  const paidMap = {};
-  const salaryMap = {};
-  const finalMonthDue = {};
+    const paidMap = {};
+    const salaryMap = {};
+    const finalMonthDue = {};
 
-  for (const entry of extendedEntries) {
-    const key = `${entry.month}_${entry.year}`;
-    const paid = parseFloat(entry.amountPayable || 0);
-    const salary = parseFloat(entry.salaryAmount || 0);
+    for (const entry of extendedEntries) {
+      const monthKey = getField(entry, 'month', 'Month');
+      const yearKey = getField(entry, 'year', 'Year');
+      const key = `${monthKey}_${yearKey}`;
+      const paid = parseFloat(getField(entry, 'amountPayable', 'Amount payable', 'amount_payable')) || 0;
+      const salary = parseFloat(getField(entry, 'salaryAmount', 'Salary Amount', 'salary_amount')) || 0;
 
-    paidMap[key] = (paidMap[key] || 0) + paid;
-    salaryMap[key] = salary; // ধরে নিচ্ছি মাসে একটাই salaryAmount থাকবে বা সর্বশেষটি প্রাধান্য পাবে
+      paidMap[key] = (paidMap[key] || 0) + paid;
+      // prefer existing salary if present; otherwise set to salary (last one wins)
+      salaryMap[key] = salaryMap[key] || salary;
+      finalMonthDue[key] = Math.max((salaryMap[key] || 0) - (paidMap[key] || 0), 0);
+    }
 
-    finalMonthDue[key] = Math.max((salaryMap[key] || 0) - paidMap[key], 0);
+    return Object.values(finalMonthDue).reduce((sum, d) => sum + (d || 0), 0);
+  } catch (err) {
+    console.error('calculateTotalDue error', err);
+    return 0;
   }
-
-  return Object.values(finalMonthDue).reduce((sum, due) => sum + due, 0);
 }
 
-// Date format
+// Date format helper
 function formatDate(dateString) {
   if (!dateString) return '';
+  // if dateString already in DD-MM-YYYY, return as is
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dateString)) return dateString;
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
   return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
@@ -238,6 +292,10 @@ function formatDate(dateString) {
 // Message
 function showMessage(text, type) {
   const messageEl = document.getElementById('message');
+  if (!messageEl) {
+    alert(text);
+    return;
+  }
   messageEl.className = type;
   messageEl.textContent = text;
   messageEl.style.display = 'block';
@@ -250,10 +308,6 @@ function loadJS() {
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
     document.head.appendChild(script);
-
-    const script2 = document.createElement('script');
-    script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js';
-    document.head.appendChild(script2);
   }
   if (!document.querySelector('script[src*="autotable"]')) {
     const script2 = document.createElement('script');
@@ -261,197 +315,163 @@ function loadJS() {
     document.head.appendChild(script2);
   }
 }
-// generateReport
+
+// generateReport (table for report area)
 function generateReport() {
   const monthYearMap = {};
   let totalDue = 0;
 
-  // সর্বশেষ entry ধরে রাখার জন্য map
+  // use allData to pick latest entry per month-year
   allData.forEach(entry => {
-    const key = `${entry.month}_${entry.year}`;
-    monthYearMap[key] = entry; // একই মাস/বছর হলে সর্বশেষ entry overwrite করবে
+    const key = `${getField(entry,'month','Month')}_${getField(entry,'year','Year')}`;
+    monthYearMap[key] = entry;
   });
 
   const tbody = document.querySelector('#reportTable tbody');
+  if (!tbody) return;
   tbody.innerHTML = '';
 
   Object.values(monthYearMap).forEach(entry => {
+    const due = parseFloat(getField(entry, 'monthlyDue', 'Monthly due', 'monthly_due')) || 0;
+    const month = getField(entry, 'month', 'Month');
+    const year = getField(entry, 'year', 'Year');
+
+    let statusText = due === 0 ? 'Paid' : `Due: ${due.toFixed(2)} Taka`;
+    let statusColor = due === 0 ? 'green' : 'red';
+    if (due !== 0) totalDue += due;
+
     const tr = document.createElement('tr');
-    const due = parseFloat(entry.monthlyDue || 0);
-
-    let statusText, statusColor;
-    if (due === 0) {
-      statusText = "Paid";
-      statusColor = "green";
-    } else {
-      statusText = `Due: ${due.toFixed(2)} Taka`;
-      statusColor = "red";
-      totalDue += due;
-    }
-
     tr.innerHTML = `
-      <td>${entry.month}</td>
-      <td>${entry.year}</td>
+      <td>${month}</td>
+      <td>${year}</td>
       <td style="color:${statusColor}; font-weight:bold;">${statusText}</td>
     `;
     tbody.appendChild(tr);
   });
-  // উপরে মোট বকেয়া দেখাও
+
   const totalDueElement = document.getElementById('reportTotalDue');
-  totalDueElement.textContent = `Total Due: ${totalDue.toFixed(2)} Taka`;
+  if (totalDueElement) totalDueElement.textContent = `Total Due: ${totalDue.toFixed(2)} Taka`;
 }
- 
+
+// generate PDF from salaryTable
 async function generatePDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    // PDF হেডার
-    doc.setFontSize(16);
-    doc.text("salary report", 14, 15);
-
-    // তারিখ ও সময়
-    const date = new Date();
-    const formattedDate = date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-    const formattedTime = date.toLocaleTimeString('en-GB');
-    doc.setFontSize(10);
-    doc.text(`Date: ${formattedDate} Time: ${formattedTime}`, 14, 22);
-
-    // টেবিল থেকে ডেটা সংগ্রহ
-    const table = document.getElementById("salaryTable");
-    const headers = [];
-    table.querySelectorAll("thead tr th").forEach(th => {
-      headers.push(th.innerText);
-    });
-
-    const rows = [];
-    table.querySelectorAll("tbody tr").forEach(tr => {
-      const row = [];
-      tr.querySelectorAll("td").forEach(td => {
-        row.push(td.innerText);
-      });
-      if (row.length > 0) rows.push(row);
-    });
-
-    if (rows.length === 0) {
-      alert("কোনো রিপোর্ট ডেটা পাওয়া যায়নি!");
-      return;
-    }
-
-    // AutoTable ব্যবহার করে PDF-এ টেবিল যুক্ত করা
-    doc.autoTable({
-      startY: 30,
-      head: [headers],
-      body: rows,
-      styles: { font: 'helvetica', fontSize: 10 },
-      headStyles: { fillColor: [0, 102, 204] },
-    });
-
-    // মোট বকেয়া টোটাল যুক্ত করা
-    const totalDueText = document.getElementById("reportTotalDue").textContent;
-    doc.setFontSize(12);
-    doc.setTextColor(255, 0, 0);
-    doc.text(totalDueText, 14, doc.lastAutoTable.finalY + 10);
-
-    // PDF সেভ
-    doc.save("salary_report.pdf");
+  if (!window.jspdf) {
+    alert('PDF লাইব্রেরি লোড হচ্ছে, অনুগ্রহ করে একটু অপেক্ষা করুন এবং আবার চেষ্টা করুন।');
+    loadJS();
+    return;
   }
-// generateStatusReportPDF
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text("Salary Report", 14, 15);
 
-  async function generateFilteredReportPDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+  const date = new Date();
+  const formattedDate = date.toLocaleDateString('en-GB');
+  doc.setFontSize(10);
+  doc.text(`Date: ${formattedDate}`, 14, 22);
 
-    // Header
-    doc.setFontSize(16);
-    doc.text("Salary Report", 14, 15);
+  const table = document.getElementById("salaryTable");
+  if (!table) { alert('কোনো ডাটা নেই'); return; }
 
-    // Date & Time
-    const date = new Date();
-    const formattedDate = date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-    const formattedTime = date.toLocaleTimeString('en-GB');
-    doc.setFontSize(10);
-    doc.text(`Date: ${formattedDate} Time: ${formattedTime}`, 14, 22);
+  const headers = [];
+  table.querySelectorAll("thead tr th").forEach(th => headers.push(th.innerText.trim()));
+  const rows = [];
+  table.querySelectorAll("tbody tr").forEach(tr => {
+    const row = [];
+    tr.querySelectorAll("td").forEach(td => row.push(td.innerText.trim()));
+    if (row.length) rows.push(row);
+  });
 
-    // Collect data from the visible reportTable rows
-    const table = document.getElementById("reportTable");
-    const headers = [];
-    table.querySelectorAll("thead tr th").forEach(th => {
-      headers.push(th.innerText.trim());
-    });
+  if (rows.length === 0) { alert('কোনো রিপোর্ট ডেটা পাওয়া যায়নি!'); return; }
 
-    const rows = [];
-    table.querySelectorAll("tbody tr").forEach(tr => {
-      if (tr.style.display !== "none") { // Only visible rows
-        const row = [];
-        tr.querySelectorAll("td").forEach(td => {
-          row.push(td.innerText.trim());
-        });
-        if (row.length > 0) rows.push(row);
-      }
-    });
+  doc.autoTable({
+    startY: 30,
+    head: [headers],
+    body: rows,
+    styles: { font: 'helvetica', fontSize: 10 },
+    headStyles: { fillColor: [0, 102, 204] },
+  });
 
-    if (rows.length === 0) {
-      alert("No filtered data found for PDF.");
-      return;
-    }
+  const totalDueText = document.getElementById("reportTotalDue")?.textContent || '';
+  doc.setFontSize(12);
+  doc.setTextColor(255, 0, 0);
+  doc.text(totalDueText, 14, doc.lastAutoTable.finalY + 10);
 
-    // Insert filtered data into PDF using AutoTable
-    doc.autoTable({
-      startY: 30,
-      head: [headers],
-      body: rows,
-      styles: { font: 'helvetica', fontSize: 10 },
-      headStyles: { fillColor: [0, 102, 204] },
-    });
+  doc.save("salary_report.pdf");
+}
 
-    // Total Due text (if available)
-    const totalDueText = document.getElementById("reportTotalDue")?.textContent;
-    if (totalDueText) {
-      doc.setFontSize(12);
-      doc.setTextColor(255, 0, 0);
-      doc.text(totalDueText, 14, doc.lastAutoTable.finalY + 10);
-    }
-
-    // Save PDF
-    doc.save("filtered_salary_report.pdf");
+// generate filtered report PDF (uses reportTable visible rows)
+async function generateFilteredReportPDF() {
+  if (!window.jspdf) {
+    alert('PDF লাইব্রেরি লোড হচ্ছে, অনুগ্রহ করে একটু অপেক্ষা করুন এবং আবার চেষ্টা করুন।');
+    loadJS();
+    return;
   }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text("Salary Report", 14, 15);
 
-  function applyFilters1() {
-  const filterType = document.getElementById("filterType").value;
-  const filterYear = document.getElementById("filterYear1").value;
+  const date = new Date();
+  const formattedDate = date.toLocaleDateString('en-GB');
+  doc.setFontSize(10);
+  doc.text(`Date: ${formattedDate}`, 14, 22);
 
   const table = document.getElementById("reportTable");
+  if (!table) { alert('কোনো রিপোর্ট টেবিল পাওয়া যায়নি'); return; }
+
+  const headers = [];
+  table.querySelectorAll("thead tr th").forEach(th => headers.push(th.innerText.trim()));
+  const rows = [];
+  table.querySelectorAll("tbody tr").forEach(tr => {
+    if (tr.style.display !== "none") {
+      const row = [];
+      tr.querySelectorAll("td").forEach(td => row.push(td.innerText.trim()));
+      if (row.length) rows.push(row);
+    }
+  });
+
+  if (rows.length === 0) { alert('No filtered data found for PDF.'); return; }
+
+  doc.autoTable({
+    startY: 30,
+    head: [headers],
+    body: rows,
+    styles: { font: 'helvetica', fontSize: 10 },
+    headStyles: { fillColor: [0, 102, 204] },
+  });
+
+  const totalDueText = document.getElementById("reportTotalDue")?.textContent || '';
+  doc.setFontSize(12);
+  doc.setTextColor(255, 0, 0);
+  doc.text(totalDueText, 14, doc.lastAutoTable.finalY + 10);
+
+  doc.save("filtered_salary_report.pdf");
+}
+
+// Report filter functions (for reportTable)
+function applyFilters1() {
+  const filterType = document.getElementById("filterType")?.value || '';
+  const filterYear = document.getElementById("filterYear1")?.value || '';
+
+  const table = document.getElementById("reportTable");
+  if (!table) return;
   const rows = table.querySelectorAll("tbody tr");
 
   rows.forEach(row => {
-    const status = row.querySelector("td:nth-child(3)").textContent.trim();
-    const year = row.querySelector("td:nth-child(2)").textContent.trim();
+    const status = row.querySelector("td:nth-child(3)")?.textContent.trim() || '';
+    const year = row.querySelector("td:nth-child(2)")?.textContent.trim() || '';
 
     let show = true;
-
-    if (filterType && !status.includes(filterType)) {
-      show = false;
-    }
-
-    if (filterYear && filterYear !== year) {
-      show = false;
-    }
+    if (filterType && !status.includes(filterType)) show = false;
+    if (filterYear && filterYear !== year) show = false;
 
     row.style.display = show ? "" : "none";
   });
 }
 
 function resetFilters2() {
-  document.getElementById("filterType").value = "";
-  document.getElementById("filterYear1").value = "";
-  applyFilters1(); // Reset filters by applying with empty values
+  const ft = document.getElementById("filterType"); if (ft) ft.value = '';
+  const fy = document.getElementById("filterYear1"); if (fy) fy.value = '';
+  applyFilters1();
 }
-// Report Pagination
