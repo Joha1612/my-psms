@@ -8,7 +8,6 @@ services:
       sizeGB: 10
     dockerfilePath: mysql/Dockerfile
     buildCommand: ""
-    startCommand: "docker-entrypoint.sh mysqld"
     envVars:
       - key: MYSQL_ROOT_PASSWORD
         value: "your_strong_password"
@@ -20,7 +19,6 @@ services:
     env: docker
     dockerfilePath: api/Dockerfile
     buildCommand: ""
-    startCommand: "node app.js"
     envVars:
       - key: MYSQL_HOST
         fromService:
