@@ -6,7 +6,7 @@ services:
       name: mysql-disk
       mountPath: /var/lib/mysql
       sizeGB: 10
-    dockerfilePath: Salary Record/mysql/Dockerfile
+    dockerfilePath: mysql/Dockerfile
     buildCommand: ""
     startCommand: "docker-entrypoint.sh mysqld"
     envVars:
@@ -18,7 +18,7 @@ services:
   - type: web
     name: psms-api
     env: docker
-    dockerfilePath: Salary Record/api/Dockerfile
+    dockerfilePath: api/Dockerfile
     buildCommand: ""
     startCommand: "node app.js"
     envVars:
