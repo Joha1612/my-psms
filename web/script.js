@@ -364,6 +364,7 @@ async function generatePDF() {
   const doc = new jsPDF();
   doc.setFontSize(16);
   doc.text("Salary Report", 14, 15);
+  doc.text("Name: Md:Samsujjoha", 14, 15);
 
   const date = new Date();
   const formattedDate = date.toLocaleDateString('en-GB');
